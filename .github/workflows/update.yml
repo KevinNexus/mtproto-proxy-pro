@@ -1,10 +1,8 @@
+
 name: Update proxies
 
-# Builds the verified proxy lists and DEPLOYS them straight to GitHub Pages as an
-# artifact. The lists are never committed to git, so the high-entropy proxy secrets
-# (public Telegram proxy parameters, not credentials) never enter the repository and
-# secret scanners have nothing to flag. This also removes the auto-commit push that
-# could race and fail.
+# Builds the verified proxy lists and deploys them to GitHub Pages
+# and Cloudflare Workers.
 
 on:
   schedule:
@@ -12,14 +10,14 @@ on:
   workflow_dispatch: # manual run button
   push:
     branches: [main]
-    paths: # redeploy when the engine, sources, or static site change
+    paths:
       - "cmd/**"
       - "internal/**"
       - "sources.txt"
       - "docs/**"
+      - "wrangler.jsonc"
       - ".github/workflows/update.yml"
 
-# No contents:write needed — nothing is committed back to the repo.
 permissions:
   contents: read
   pages: write
@@ -41,7 +39,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          cache: false # no module dependencies (no go.sum)
+          cache: false
 
       - name: Cache GeoIP dataset
         uses: actions/cache@v4
@@ -77,3 +75,10 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
