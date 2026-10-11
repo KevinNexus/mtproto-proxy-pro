@@ -1,7 +1,7 @@
 {
-  "name": "purple-thunder-cedc",
-  "compatibility_date": "2026-10-10",
-  "main": "worker.js",
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tgproxy",
+  "compatibility_date": "2026-10-11",
   "assets": {
     "directory": "./docs"
   }
