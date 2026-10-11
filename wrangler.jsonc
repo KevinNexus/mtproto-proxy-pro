@@ -1,7 +1,7 @@
-
 {
   "name": "purple-thunder-cedc",
   "compatibility_date": "2026-10-10",
+  "main": "worker.js",
   "assets": {
     "directory": "./docs"
   }
