@@ -226,6 +226,15 @@ async function handleRequest(request, env) {
   const pathname = url.pathname;
   const botToken = env.TELEGRAM_BOT_TOKEN;
 
+  // Temporary safe diagnostic: report binding presence only, never secret values.
+  if (pathname === "/api/diagnostic/config") {
+    return json({
+      hasBotToken: Boolean(botToken),
+      hasProxyData: Boolean(env.PROXY_DATA),
+      hasAssets: Boolean(env.ASSETS)
+    });
+  }
+
   if (!botToken) {
     return json({ ok: false, error: "Server configuration error" }, 500);
   }
