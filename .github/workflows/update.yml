@@ -1,12 +1,9 @@
 name: Update proxies
 
-# Builds the verified proxy lists and deploys them to GitHub Pages
-# and Cloudflare Workers.
-
 on:
   schedule:
-    - cron: "17 */6 * * *" # every 6 hours
-  workflow_dispatch: # manual run button
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -14,6 +11,7 @@ on:
       - "internal/**"
       - "sources.txt"
       - "docs/**"
+      - "worker.js"
       - "wrangler.jsonc"
       - ".github/workflows/update.yml"
 
@@ -29,9 +27,11 @@ concurrency:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -57,7 +57,7 @@ jobs:
       - name: Build
         run: go build -o tgproxy ./cmd/tgproxy
 
-      - name: Generate lists (+ in-country reachability)
+      - name: Generate proxy lists
         run: ./tgproxy --concurrency 250 --timeout 6s --reach --reach-sample 60 --out docs --docs docs
 
       - name: Refresh sitemap lastmod
@@ -75,8 +75,8 @@ jobs:
         id: deploy
         uses: actions/deploy-pages@v4
 
-      - name: Deploy to Cloudflare Workers
-        run: npx --yes wrangler@3.90.0 deploy --name purple-thunder-cedc --compatibility-date 2026-10-11 --assets ./docs
+      - name: Deploy Worker with configuration
+        run: npx --yes wrangler@3.90.0 deploy --config wrangler.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
