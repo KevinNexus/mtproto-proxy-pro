@@ -2,6 +2,14 @@
 name: Update proxies
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "worker.js"
+      - "wrangler.jsonc"
+      - "docs/**"
+      - ".github/workflows/update.yml"
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
