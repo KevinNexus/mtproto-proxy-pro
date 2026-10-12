@@ -1,10 +1,12 @@
 
-/* mtproto-proxy-pro — loads proxies.json and renders a searchable, sortable proxy list,
-   with extra help for users in countries that block Telegram. */
+/* 资源公社·代理助手
+   Telegram 登录验证 + 频道成员检查 + 代理列表
+*/
 (() => {
   "use strict";
 
-  const $ = (sel) => document.querySelector(sel);
+  const $ = (selector) => document.querySelector(selector);
+
   const rowsEl = $("#rows");
   const loadingEl = $("#loading");
   const emptyEl = $("#empty");
@@ -17,24 +19,44 @@
   const bannerEl = $("#banner");
   const bannerTextEl = $("#banner-text");
 
-  let ALL = [];
+  const authStatusEl = $("#auth-status");
+  const loginWidgetEl = $("#telegram-login-widget");
+  const joinChannelEl = $("#join-channel");
+  const authActionsEl = $("#auth-actions");
+  const logoutButtonEl = $("#logout-button");
+  const accessRequiredEl = $("#access-required");
+  const proxyContentEl = $("#proxy-content");
 
-  // Countries that actively block/throttle Telegram. Used for the banner.
+  let ALL = [];
+  let CURRENT_STATS = {};
+  let authenticated = false;
+  let loadingProxies = false;
+
   const CENSORED = {
-    IR: "Iran", RU: "Russia", CN: "China", TM: "Turkmenistan", VN: "Vietnam",
-    VE: "Venezuela", PK: "Pakistan", BY: "Belarus", UZ: "Uzbekistan", MM: "Myanmar",
+    IR: "Iran", RU: "Russia", CN: "China", TM: "Turkmenistan",
+    VN: "Vietnam", VE: "Venezuela", PK: "Pakistan",
+    BY: "Belarus", UZ: "Uzbekistan", MM: "Myanmar"
   };
 
-  const COUNTRY_NAMES = new Intl.DisplayNames(["en"], { type: "region" });
+  const COUNTRY_NAMES = new Intl.DisplayNames(["en"], {
+    type: "region"
+  });
 
   function flag(cc) {
-    if (!cc || cc.length !== 2 || cc === "??" || cc === "XX") return "🌐";
+    if (!cc || !/^[A-Z]{2}$/.test(cc) || cc === "XX") {
+      return "🌐";
+    }
+
     const A = 0x1f1e6;
-    return String.fromCodePoint(A + (cc.charCodeAt(0) - 65), A + (cc.charCodeAt(1) - 65));
+    return String.fromCodePoint(
+      A + cc.charCodeAt(0) - 65,
+      A + cc.charCodeAt(1) - 65
+    );
   }
 
   function countryName(cc) {
     if (!cc || cc === "??" || cc === "XX") return "Unknown";
+
     try {
       return COUNTRY_NAMES.of(cc) || cc;
     } catch {
@@ -42,14 +64,8 @@
     }
   }
 
-  function latClass(ms) {
-    if (ms < 120) return "lat--fast";
-    if (ms < 350) return "lat--mid";
-    return "lat--slow";
-  }
-
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({
       "&": "&amp;",
       "<": "&lt;",
       ">": "&gt;",
@@ -58,48 +74,61 @@
     }[c]));
   }
 
+  function latClass(ms) {
+    if (ms < 120) return "lat--fast";
+    if (ms < 350) return "lat--mid";
+    return "lat--slow";
+  }
+
   function relTime(iso) {
-    const t = Date.parse(iso);
-    if (isNaN(t)) return "—";
-    const mins = Math.round((Date.now() - t) / 60000);
-    if (mins < 1) return "just now";
-    if (mins < 60) return mins + "m ago";
-    const h = Math.round(mins / 60);
-    if (h < 24) return h + "h ago";
-    return Math.round(h / 24) + "d ago";
+    const time = Date.parse(iso);
+    if (Number.isNaN(time)) return "—";
+
+    const mins = Math.round((Date.now() - time) / 60000);
+    if (mins < 1) return "刚刚";
+    if (mins < 60) return `${mins} 分钟前`;
+
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours} 小时前`;
+
+    return `${Math.round(hours / 24)} 天前`;
   }
 
-  // Universal Telegram proxy link, used for sharing and fallback.
   function tmeHref(p) {
-    return p.link || `https://t.me/proxy?server=${encodeURIComponent(p.server)}&port=${p.port}&secret=${encodeURIComponent(p.secret)}`;
+    if (p.link) return p.link;
+
+    return `https://t.me/proxy?server=${encodeURIComponent(p.server)}&port=${encodeURIComponent(p.port)}&secret=${encodeURIComponent(p.secret)}`;
   }
 
-  // Telegram app link.
   function tgHref(p) {
-    return `tg://proxy?server=${encodeURIComponent(p.server)}&port=${p.port}&secret=${encodeURIComponent(p.secret)}`;
+    return `tg://proxy?server=${encodeURIComponent(p.server)}&port=${encodeURIComponent(p.port)}&secret=${encodeURIComponent(p.secret)}`;
   }
 
-  // Check the expected FakeTLS secret structure.
-  // This does not prove the proxy can connect to Telegram successfully.
   function fakeTLSDomain(secret) {
-    if (typeof secret !== "string" || !secret.toLowerCase().startsWith("ee")) {
+    if (typeof secret !== "string" ||
+        !secret.toLowerCase().startsWith("ee")) {
       return "";
     }
 
     const hex = secret.slice(2);
-    if (!hex || hex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hex)) {
+
+    if (!hex || hex.length % 2 !== 0 ||
+        !/^[0-9a-f]+$/i.test(hex)) {
       return "";
     }
 
     try {
       const bytes = [];
+
       for (let i = 0; i < hex.length; i += 2) {
         bytes.push(parseInt(hex.slice(i, i + 2), 16));
       }
 
       let domain = "";
-      for (const b of bytes) {
-        const ch = String.fromCharCode(b);
+
+      for (const byte of bytes) {
+        const ch = String.fromCharCode(byte);
+
         if (/[a-z0-9.-]/i.test(ch)) {
           domain += ch;
         } else {
@@ -109,7 +138,9 @@
 
       domain = domain.toLowerCase().replace(/\.$/, "");
 
-      if (domain.length < 4 || domain.length > 253 || !domain.includes(".")) {
+      if (domain.length < 4 ||
+          domain.length > 253 ||
+          !domain.includes(".")) {
         return "";
       }
 
@@ -132,103 +163,390 @@
     }
   }
 
-  // Only classify structurally plausible FakeTLS candidates.
-  // TCP reachability alone is not proof of censorship resistance.
   function isResistant(p) {
-    return p.type === "ee"
-      && Number(p.port) === 443
-      && Boolean(fakeTLSDomain(p.secret));
+    return p.type === "ee" &&
+      Number(p.port) === 443 &&
+      Boolean(fakeTLSDomain(p.secret));
   }
 
   function resilienceTier(score) {
-    if (score >= 75) return { cls: "res--high", label: "High" };
-    if (score >= 50) return { cls: "res--mid", label: "Med" };
-    return { cls: "res--low", label: "Low" };
+    if (score >= 75) return { cls: "res--high", label: "高" };
+    if (score >= 50) return { cls: "res--mid", label: "中" };
+    return { cls: "res--low", label: "低" };
   }
 
-  function fillStats(data) {
-    $('[data-stat="count"]').textContent =
-      (data.count ?? ALL.length).toLocaleString();
+  function showToast(message) {
+    if (!toastEl) {
+      console.log(message);
+      return;
+    }
 
-    // This number comes from the generated JSON and may use backend criteria.
-    const resistant = typeof data.censorship_resistant === "number"
-      ? data.censorship_resistant
-      : ALL.filter(isResistant).length;
+    toastEl.textContent = message;
+    toastEl.hidden = false;
 
-    $('[data-stat="resistant"]').textContent = resistant.toLocaleString();
+    requestAnimationFrame(() => toastEl.classList.add("show"));
 
-    $('[data-stat="countries"]').textContent =
-      Object.keys(data.countries || {}).filter((c) => c !== "??").length;
+    clearTimeout(showToast.timer);
 
-    const upd = $('[data-stat="updated"]');
-    upd.textContent = relTime(data.generated_at_utc);
-    upd.title = data.generated_at_utc || "";
+    showToast.timer = setTimeout(() => {
+      toastEl.classList.remove("show");
+
+      setTimeout(() => {
+        toastEl.hidden = true;
+      }, 250);
+    }, 2200);
   }
 
-  function fillCountryFilter(data) {
-    const entries = Object.entries(data.countries || {})
-      .filter(([cc]) => cc !== "??")
-      .sort((a, b) => b[1] - a[1]);
+  function setAuthMessage(message) {
+    if (authStatusEl) authStatusEl.textContent = message;
+  }
 
-    for (const [cc, n] of entries) {
-      const o = document.createElement("option");
-      o.value = cc;
-      o.textContent = `${flag(cc)} ${countryName(cc)} (${n})`;
-      countryEl.appendChild(o);
+  function showLogin(message) {
+    authenticated = false;
+    ALL = [];
+
+    if (proxyContentEl) proxyContentEl.hidden = true;
+    if (accessRequiredEl) accessRequiredEl.hidden = false;
+    if (loginWidgetEl) loginWidgetEl.hidden = false;
+    if (authActionsEl) authActionsEl.hidden = true;
+    if (joinChannelEl) joinChannelEl.hidden = true;
+
+    if (rowsEl) rowsEl.replaceChildren();
+    if (shownEl) shownEl.textContent = "0";
+    if (loadingEl) loadingEl.hidden = true;
+    if (emptyEl) emptyEl.hidden = true;
+
+    setAuthMessage(message || "请使用 Telegram 登录，并加入官方频道 @CXSNS。");
+  }
+
+  function showLoggedIn() {
+    authenticated = true;
+
+    if (proxyContentEl) proxyContentEl.hidden = false;
+    if (accessRequiredEl) accessRequiredEl.hidden = true;
+    if (loginWidgetEl) loginWidgetEl.hidden = true;
+    if (authActionsEl) authActionsEl.hidden = false;
+    if (joinChannelEl) joinChannelEl.hidden = true;
+
+    setAuthMessage("验证成功，正在加载代理列表……");
+  }
+
+  async function readJson(response) {
+    try {
+      return await response.json();
+    } catch {
+      return {};
     }
   }
 
-  function reachChips(p) {
-    if (!p.reachable_from || !p.reachable_from.length) return "";
+  async function requestJson(url, options = {}) {
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      cache: "no-store",
+      ...options,
+      headers: {
+        "Accept": "application/json",
+        ...(options.headers || {})
+      }
+    });
 
-    return " " + p.reachable_from.map((cc) =>
-      `<span class="reach-chip" title="TCP reachability reported from ${esc(countryName(cc))}">${flag(cc)} ${esc(cc)}</span>`
+    const data = await readJson(response);
+
+    return { response, data };
+  }
+
+  // 登录成功后，才请求受保护的代理数据。
+  async function loadProxies() {
+    if (!authenticated || loadingProxies) return;
+
+    loadingProxies = true;
+
+    if (loadingEl) {
+      loadingEl.hidden = false;
+      loadingEl.textContent = "正在加载代理列表……";
+    }
+
+    try {
+      const { response, data } = await requestJson("/proxies.json");
+
+      if (response.status === 401 || response.status === 403) {
+        showLogin("登录状态失效，或尚未加入官方频道，请重新验证。");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`代理数据请求失败：HTTP ${response.status}`);
+      }
+
+      if (!Array.isArray(data.proxies)) {
+        throw new Error("代理数据格式不正确。");
+      }
+
+      ALL = data.proxies;
+      CURRENT_STATS = data;
+
+      if (loadingEl) loadingEl.hidden = true;
+
+      fillStats(data);
+      fillCountryFilter(data);
+      applyFilters();
+      detectCountry();
+
+      setAuthMessage("已通过验证，可以使用代理列表。");
+    } catch (error) {
+      console.error("代理列表加载失败：", error);
+
+      if (loadingEl) {
+        loadingEl.hidden = false;
+        loadingEl.textContent =
+          "代理列表加载失败，请稍后刷新。如果问题持续存在，请联系管理员。";
+      }
+
+      showToast("代理列表加载失败");
+    } finally {
+      loadingProxies = false;
+    }
+  }
+
+  // Telegram Login Widget 会调用这个全局函数。
+  window.onTelegramAuth = async function (user) {
+    if (!user || !user.id || !user.hash) {
+      setAuthMessage("Telegram 登录信息不完整，请重新登录。");
+      return;
+    }
+
+    setAuthMessage("正在验证 Telegram 身份及频道成员资格……");
+
+    if (loginWidgetEl) loginWidgetEl.hidden = true;
+
+    try {
+      const { response, data } = await requestJson(
+        "/api/auth/telegram",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(user)
+        }
+      );
+
+      if (!response.ok) {
+        const reason = String(
+          data.error || data.message || ""
+        ).toLowerCase();
+
+        if (
+          response.status === 403 &&
+          /member|channel|join|subscribe|not.?joined/.test(reason)
+        ) {
+          setAuthMessage("请先加入资源公社官方频道 @CXSNS，再重新登录。");
+
+          if (joinChannelEl) {
+            joinChannelEl.href = "https://t.me/CXSNS";
+            joinChannelEl.hidden = false;
+          }
+
+          if (loginWidgetEl) loginWidgetEl.hidden = false;
+          return;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          setAuthMessage(
+            "身份验证未通过。请确认登录账号正确，并已加入 @CXSNS。"
+          );
+        } else {
+          setAuthMessage(
+            `验证服务暂时不可用（HTTP ${response.status}），请稍后重试。`
+          );
+        }
+
+        if (loginWidgetEl) loginWidgetEl.hidden = false;
+        return;
+      }
+
+      // 只有服务器明确确认认证成功，才展示代理内容。
+      if (data.authenticated !== true && data.ok !== true) {
+        setAuthMessage("服务器未确认登录成功，请稍后重试。");
+        if (loginWidgetEl) loginWidgetEl.hidden = false;
+        return;
+      }
+
+      showLoggedIn();
+      await loadProxies();
+    } catch (error) {
+      console.error("Telegram 登录验证失败：", error);
+      setAuthMessage("无法连接验证服务，请稍后重试。");
+
+      if (loginWidgetEl) loginWidgetEl.hidden = false;
+    }
+  };
+
+  async function checkAuthStatus() {
+    showLogin("正在检查登录状态……");
+
+    try {
+      const { response, data } = await requestJson("/api/auth/status");
+
+      if (
+        response.ok &&
+        data.authenticated === true
+      ) {
+        showLoggedIn();
+        await loadProxies();
+        return;
+      }
+
+      showLogin("请使用 Telegram 登录，并加入官方频道 @CXSNS。");
+    } catch (error) {
+      console.error("登录状态检查失败：", error);
+
+      showLogin(
+        "暂时无法连接验证服务。请稍后刷新页面，或联系管理员。"
+      );
+    }
+  }
+
+  if (logoutButtonEl) {
+    logoutButtonEl.addEventListener("click", async () => {
+      try {
+        await requestJson("/api/auth/logout", {
+          method: "POST"
+        });
+      } catch (error) {
+        console.error("退出登录请求失败：", error);
+      }
+
+      showLogin("已退出登录。请重新验证后访问代理列表。");
+      showToast("已退出登录");
+    });
+  }
+
+  function fillStats(data) {
+    const countEl = $('[data-stat="count"]');
+    const resistantEl = $('[data-stat="resistant"]');
+    const countriesEl = $('[data-stat="countries"]');
+    const updatedEl = $('[data-stat="updated"]');
+
+    if (countEl) {
+      countEl.textContent =
+        (data.count ?? ALL.length).toLocaleString();
+    }
+
+    if (resistantEl) {
+      const count = typeof data.censorship_resistant === "number"
+        ? data.censorship_resistant
+        : ALL.filter(isResistant).length;
+
+      resistantEl.textContent = count.toLocaleString();
+    }
+
+    if (countriesEl) {
+      countriesEl.textContent = Object.keys(
+        data.countries || {}
+      ).filter((country) => country !== "??").length;
+    }
+
+    if (updatedEl) {
+      const updated = data.generated_at_utc || data.updatedAt || "";
+      updatedEl.textContent = relTime(updated);
+      updatedEl.title = updated;
+    }
+  }
+
+  function fillCountryFilter(data) {
+    if (!countryEl) return;
+
+    // 避免重新加载时重复添加国家选项。
+    countryEl.replaceChildren();
+
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = "所有国家";
+    countryEl.appendChild(allOption);
+
+    const countries = data.countries || {};
+
+    // 如果 JSON 没有 countries 统计，就从代理数据计算。
+    const entries = Object.entries(countries).length
+      ? Object.entries(countries)
+      : Object.entries(
+          ALL.reduce((result, proxy) => {
+            const cc = proxy.country || "??";
+            result[cc] = (result[cc] || 0) + 1;
+            return result;
+          }, {})
+        );
+
+    entries
+      .filter(([cc]) => cc !== "??")
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([cc, count]) => {
+        const option = document.createElement("option");
+        option.value = cc;
+        option.textContent =
+          `${flag(cc)} ${countryName(cc)} (${count})`;
+
+        countryEl.appendChild(option);
+      });
+  }
+
+  function reachChips(proxy) {
+    if (!Array.isArray(proxy.reachable_from) ||
+        !proxy.reachable_from.length) {
+      return "";
+    }
+
+    return " " + proxy.reachable_from.map((cc) =>
+      `<span class="reach-chip" title="TCP 可达性报告：${esc(countryName(cc))}">${flag(cc)} ${esc(cc)}</span>`
     ).join(" ");
   }
 
-  function rowHTML(p) {
-    const name = countryName(p.country);
+  function rowHTML(proxy) {
+    const name = countryName(proxy.country);
+
     const typeLabel = {
       ee: "FakeTLS",
       dd: "Secure",
       plain: "Basic"
-    }[p.type] || p.type;
+    }[proxy.type] || proxy.type || "Unknown";
 
-    const statusLabel = p.status === "handshake_ok"
-      ? '<span class="status-tag" title="TCP connected and TLS handshake completed; Telegram messaging is not guaranteed">● TLS verified</span>'
-      : '<span class="status-tag status-tag--reach" title="TCP connection only; Telegram connectivity is not verified">● TCP only</span>';
+    const statusLabel = proxy.status === "handshake_ok"
+      ? '<span class="status-tag" title="TLS 握手完成，但不保证 Telegram 一定可用">● TLS 已验证</span>'
+      : '<span class="status-tag status-tag--reach" title="仅代表 TCP 可连接，不保证 Telegram 可用">● TCP 检测</span>';
 
-    const tier = resilienceTier(p.resilience || 0);
-    const link = tmeHref(p);
-    const lat = typeof p.latency_ms === "number" ? p.latency_ms : null;
+    const tier = resilienceTier(proxy.resilience || 0);
+    const link = tmeHref(proxy);
+    const telegramLink = tgHref(proxy);
+    const latency = typeof proxy.latency_ms === "number"
+      ? proxy.latency_ms
+      : null;
 
     return `<tr>
-      <td class="col-country" data-label="Country">
+      <td class="col-country" data-label="国家">
         <span class="td-country">
-          <span class="flag" aria-hidden="true">${flag(p.country)}</span>
+          <span class="flag" aria-hidden="true">${flag(proxy.country)}</span>
           <span>${esc(name)}</span>
         </span>
       </td>
-      <td class="col-server" data-label="Server">
-        <span class="server">${esc(p.server)}<span class="port">:${p.port}</span></span>
-        <br>${statusLabel}${reachChips(p)}
+      <td class="col-server" data-label="服务器">
+        <span class="server">${esc(proxy.server)}<span class="port">:${esc(proxy.port)}</span></span>
+        <br>${statusLabel}${reachChips(proxy)}
       </td>
-      <td class="col-type" data-label="Type">
-        <span class="badge badge--${esc(p.type)}">${esc(typeLabel)}</span>
-        <span class="badge res ${tier.cls}" title="Estimated structural score ${p.resilience || 0}/100; not a measured success rate">🛡 ${tier.label} estimate</span>
+      <td class="col-type" data-label="类型">
+        <span class="badge badge--${esc(proxy.type)}">${esc(typeLabel)}</span>
+        <span class="badge res ${tier.cls}" title="结构估算，不是实际成功率">🛡 ${tier.label}</span>
       </td>
-      <td class="col-num" data-label="Latency">
-        <span class="lat ${latClass(lat ?? 9999)}">${lat ?? "—"} ms</span>
+      <td class="col-num" data-label="延迟">
+        <span class="lat ${latClass(latency ?? 9999)}">${latency ?? "—"} ms</span>
       </td>
-      <td class="col-num" data-label="Uptime">
-        <span class="uptime">${p.uptime_pct ?? 0}%</span>
+      <td class="col-num" data-label="在线率">
+        <span class="uptime">${esc(proxy.uptime_pct ?? 0)}%</span>
       </td>
-      <td class="col-actions" data-label="Connect">
+      <td class="col-actions" data-label="连接">
         <div class="actions">
           <button class="btn btn--icon" type="button"
             data-copy="${esc(link)}"
-            aria-label="Copy proxy link for ${esc(p.server)}"
-            title="Copy link">
+            aria-label="复制 ${esc(proxy.server)} 的代理链接"
+            title="复制链接">
             <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
               <path fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round"
@@ -236,37 +554,34 @@
             </svg>
           </button>
           <a class="btn btn--go" href="${esc(link)}"
-            data-tg="${esc(tgHref(p))}"
+            data-tg="${esc(telegramLink)}"
             target="_blank" rel="noopener"
-            aria-label="Connect to ${esc(p.server)} in Telegram">Connect</a>
+            aria-label="在 Telegram 中连接 ${esc(proxy.server)}">连接 Telegram</a>
         </div>
       </td>
     </tr>`;
   }
 
   function applyFilters() {
-    const q = searchEl.value.trim().toLowerCase();
-    const cc = countryEl.value;
-    const resistOnly = resistEl.checked;
-    const sort = sortEl.value;
+    if (!authenticated || !rowsEl) return;
 
-    let list = ALL.filter((p) => {
-      if (cc && p.country !== cc) return false;
-      if (resistOnly && !isResistant(p)) return false;
+    const query = searchEl ? searchEl.value.trim().toLowerCase() : "";
+    const country = countryEl ? countryEl.value : "";
+    const resistantOnly = resistEl ? resistEl.checked : false;
+    const sort = sortEl ? sortEl.value : "resilience";
 
-      const server = String(p.server || "").toLowerCase();
-      const country = String(p.country || "").toLowerCase();
-      const countryLabel = countryName(p.country).toLowerCase();
+    let list = ALL.filter((proxy) => {
+      if (country && proxy.country !== country) return false;
+      if (resistantOnly && !isResistant(proxy)) return false;
 
-      if (q && !(
-        server.includes(q) ||
-        countryLabel.includes(q) ||
-        country.includes(q)
-      )) {
-        return false;
-      }
+      const server = String(proxy.server || "").toLowerCase();
+      const cc = String(proxy.country || "").toLowerCase();
+      const countryLabel = countryName(proxy.country).toLowerCase();
 
-      return true;
+      return !query ||
+        server.includes(query) ||
+        countryLabel.includes(query) ||
+        cc.includes(query);
     });
 
     if (sort === "resilience") {
@@ -291,146 +606,145 @@
     }
 
     rowsEl.innerHTML = list.map(rowHTML).join("");
-    shownEl.textContent = list.length.toLocaleString();
-    emptyEl.hidden = list.length !== 0;
+
+    if (shownEl) shownEl.textContent = list.length.toLocaleString();
+    if (emptyEl) emptyEl.hidden = list.length !== 0;
   }
 
-  // If the visitor is in a restricted country, show FakeTLS candidates first.
   function detectCountry() {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 4000);
+    if (!authenticated || !bannerEl || !bannerTextEl) return;
 
-    fetch("https://api.country.is/", { signal: ctrl.signal })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        clearTimeout(t);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
 
-        const cc = d && d.country;
+    fetch("https://api.country.is/", {
+      signal: controller.signal
+    })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        clearTimeout(timeout);
+
+        if (!authenticated) return;
+
+        const cc = data && data.country;
         if (!cc || !CENSORED[cc]) return;
 
-        const reachable = ALL.some((p) =>
-          (p.reachable_from || []).includes(cc)
+        const reachable = ALL.some((proxy) =>
+          (proxy.reachable_from || []).includes(cc)
         );
 
         bannerTextEl.innerHTML =
-          `Telegram may be restricted in <strong>${esc(CENSORED[cc])}</strong>. Showing <strong>FakeTLS candidates</strong>` +
+          `检测到所在地区可能限制 Telegram：<strong>${esc(CENSORED[cc])}</strong>。` +
+          "建议优先尝试 FakeTLS 代理。" +
           (reachable
-            ? ` with TCP reachability reports from ${esc(CENSORED[cc])} ${flag(cc)}.`
-            : ` using the expected FakeTLS structure on port 443.`) +
-          ` These checks do not guarantee Telegram connectivity.`;
+            ? ` 有来自该地区的 TCP 可达报告 ${flag(cc)}。`
+            : " 当前没有来自该地区的可达报告。") +
+          " 检测结果不保证代理一定可用。";
 
         bannerEl.hidden = false;
-        resistEl.checked = true;
-        sortEl.value = "resilience";
+
+        if (resistEl) resistEl.checked = true;
+        if (sortEl) sortEl.value = "resilience";
+
         applyFilters();
       })
-      .catch(() => clearTimeout(t));
+      .catch(() => clearTimeout(timeout));
   }
 
   function debounce(fn, ms) {
-    let t;
-    return (...a) => {
-      clearTimeout(t);
-      t = setTimeout(() => fn(...a), ms);
+    let timer;
+
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), ms);
     };
   }
 
-  function showToast(msg) {
-    toastEl.textContent = msg;
-    toastEl.hidden = false;
-    requestAnimationFrame(() => toastEl.classList.add("show"));
+  // 复制代理链接。
+  if (rowsEl) {
+    rowsEl.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-copy]");
+      if (!button || !authenticated) return;
 
-    clearTimeout(showToast._t);
-    showToast._t = setTimeout(() => {
-      toastEl.classList.remove("show");
-      setTimeout(() => {
-        toastEl.hidden = true;
-      }, 250);
-    }, 1800);
-  }
-
-  // Copy proxy links.
-  rowsEl.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-copy]");
-    if (!btn) return;
-
-    const link = btn.getAttribute("data-copy");
-
-    try {
-      await navigator.clipboard.writeText(link);
-      showToast("Proxy link copied");
-    } catch {
-      const ta = document.createElement("textarea");
-      ta.value = link;
-      document.body.appendChild(ta);
-      ta.select();
+      const link = button.getAttribute("data-copy");
 
       try {
-        document.execCommand("copy");
-        showToast("Proxy link copied");
+        await navigator.clipboard.writeText(link);
+        showToast("代理链接已复制");
       } catch {
-        showToast("Copy failed — long-press to copy");
-      }
+        const textarea = document.createElement("textarea");
+        textarea.value = link;
+        document.body.appendChild(textarea);
+        textarea.select();
 
-      ta.remove();
-    }
-  });
+        try {
+          document.execCommand("copy");
+          showToast("代理链接已复制");
+        } catch {
+          showToast("复制失败，请长按链接复制");
+        }
 
-  // Try opening Telegram directly, then fall back to the t.me link.
-  rowsEl.addEventListener("click", (e) => {
-    const a = e.target.closest("a.btn--go");
-    if (!a || !a.dataset.tg) return;
-
-    e.preventDefault();
-
-    const web = a.getAttribute("href");
-    const app = a.dataset.tg;
-    let handled = false;
-
-    const cancel = () => {
-      handled = true;
-    };
-
-    window.addEventListener("blur", cancel, { once: true });
-
-    document.addEventListener("visibilitychange", function vc() {
-      if (document.hidden) {
-        cancel();
-        document.removeEventListener("visibilitychange", vc);
+        textarea.remove();
       }
     });
 
-    window.location.href = app;
+    // 优先打开 Telegram 应用，无法打开时回退到网页链接。
+    rowsEl.addEventListener("click", (event) => {
+      const anchor = event.target.closest("a.btn--go");
 
-    window.setTimeout(() => {
-      if (!handled) window.location.href = web;
-    }, 2000);
+      if (!anchor || !anchor.dataset.tg || !authenticated) return;
 
-    showToast("Opening Telegram…");
-  });
+      event.preventDefault();
 
-  searchEl.addEventListener("input", debounce(applyFilters, 120));
-  countryEl.addEventListener("change", applyFilters);
-  sortEl.addEventListener("change", applyFilters);
-  resistEl.addEventListener("change", applyFilters);
+      const webLink = anchor.getAttribute("href");
+      const appLink = anchor.dataset.tg;
+      let switchedAway = false;
 
-  fetch("proxies.json", { cache: "no-store" })
-    .then((r) => {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    })
-    .then((data) => {
-      ALL = Array.isArray(data.proxies) ? data.proxies : [];
+      const markSwitched = () => {
+        switchedAway = true;
+      };
 
-      loadingEl.hidden = true;
-      fillStats(data);
-      fillCountryFilter(data);
-      applyFilters();
-      detectCountry();
-    })
-    .catch((err) => {
-      loadingEl.textContent =
-        "Could not load the proxy list. Try the raw .txt or JSON links above.";
-      console.error("proxies.json load failed:", err);
+      window.addEventListener("blur", markSwitched, { once: true });
+
+      const onVisibility = () => {
+        if (document.hidden) {
+          markSwitched();
+          document.removeEventListener("visibilitychange", onVisibility);
+        }
+      };
+
+      document.addEventListener("visibilitychange", onVisibility);
+
+      window.location.href = appLink;
+
+      window.setTimeout(() => {
+        document.removeEventListener("visibilitychange", onVisibility);
+
+        if (!switchedAway) {
+          window.location.href = webLink;
+        }
+      }, 1800);
+
+      showToast("正在打开 Telegram……");
     });
+  }
+
+  if (searchEl) {
+    searchEl.addEventListener("input", debounce(applyFilters, 120));
+  }
+
+  if (countryEl) {
+    countryEl.addEventListener("change", applyFilters);
+  }
+
+  if (sortEl) {
+    sortEl.addEventListener("change", applyFilters);
+  }
+
+  if (resistEl) {
+    resistEl.addEventListener("change", applyFilters);
+  }
+
+  // 页面启动时先验证会话，不再直接公开请求代理列表。
+  checkAuthStatus();
 })();
