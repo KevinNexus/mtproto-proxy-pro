@@ -1,9 +1,10 @@
 # mtproto-proxy-pro source feeds — one URL per line, '#' for comments.
-# These are public, community-maintained MTProto proxy lists. Edit freely;
-# the collector fetches every URL, parses any supported format, and dedupes.
-# Verified live on 2026-06-23.
+# Public community-maintained MTProto proxy lists; all candidates are rechecked before publishing.
+# Feeds may contain duplicates or dead proxies; the collector filters them.
 
 https://raw.githubusercontent.com/SoliSpirit/mtproto/master/all_proxies.txt
+https://raw.githubusercontent.com/tgmtproxy/mtproxy/main/proxies.json
+https://raw.githubusercontent.com/tgmtproxy/mtproxy/main/proxies.txt
 https://raw.githubusercontent.com/whoahaow/rjsxrd/main/source/config/tg_proxies.txt
 https://raw.githubusercontent.com/kort0881/telegram-proxy-collector/main/verified/proxy_links_tme_clean.txt
 https://raw.githubusercontent.com/ALIILAPRO/MTProtoProxy/main/mtproto.txt
