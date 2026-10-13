@@ -264,6 +264,30 @@ async function handleRequest(request, env) {
     return json({ ok: true, status: "authenticated" }, 200, { "Set-Cookie": sessionCookie(token, SESSION_SECONDS) });
   }
 
+  if (pathname === "/api/telegram/webhook/setup" && request.method === "POST") {
+    const expectedSecret = env.TELEGRAM_WEBHOOK_SECRET;
+    if (!expectedSecret || request.headers.get("X-Setup-Secret") !== expectedSecret) {
+      return json({ ok: false, error: "Unauthorized setup request" }, 401);
+    }
+    const webhookUrl = "https://kisss.kdns.fr/api/telegram/webhook";
+    try {
+      const response = await fetch("https://api.telegram.org/bot" + botToken + "/setWebhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: webhookUrl,
+          secret_token: expectedSecret,
+          allowed_updates: ["message"],
+          drop_pending_updates: false
+        })
+      });
+      const result = await response.json();
+      return json({ ok: Boolean(result.ok), description: result.description || (result.ok ? "Webhook configured" : "Telegram rejected setup") }, result.ok ? 200 : 502);
+    } catch {
+      return json({ ok: false, error: "Unable to reach Telegram API" }, 502);
+    }
+  }
+
   if (pathname === "/api/telegram/webhook" && request.method === "POST") {
     const expectedSecret = env.TELEGRAM_WEBHOOK_SECRET;
     if (!expectedSecret || request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== expectedSecret) {
