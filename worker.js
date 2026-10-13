@@ -151,6 +151,7 @@ async function createSession(user, botToken) {
     id: String(user.id),
     first_name: String(user.first_name || "").slice(0, 100),
     username: String(user.username || "").slice(0, 100),
+    subscribed: true,
     exp: Math.floor(Date.now() / 1000) + SESSION_SECONDS
   };
 
@@ -411,9 +412,8 @@ async function handleRequest(request, env) {
       return json({ ok: true, authenticated: false, subscribed: false });
     }
 
-    const subscribed = await checkMembership(botToken, session.id);
-
-    if (!subscribed) {
+    // Session is signed, short-lived, and only issued after membership is verified.
+    if (session.subscribed !== true) {
       return json(
         { ok: true, authenticated: false, subscribed: false },
         200,
@@ -452,8 +452,8 @@ async function handleRequest(request, env) {
       return json({ ok: false, error: "请先登录 Telegram" }, 401);
     }
 
-    if (!(await checkMembership(botToken, session.id))) {
-      return json({ ok: false, error: "请先加入官方频道 @CXSNS" }, 403);
+    if (session.subscribed !== true) {
+      return json({ ok: false, error: "请重新登录并验证官方频道订阅" }, 403);
     }
 
     if (pathname !== "/proxies.json" || request.method !== "GET") {
