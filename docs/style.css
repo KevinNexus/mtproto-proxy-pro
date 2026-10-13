@@ -232,3 +232,8 @@ h1{letter-spacing:-.045em;text-wrap:balance}
 .note{line-height:1.8}.footer{background:rgba(5,9,17,.32)}
 @media(max-width:720px){.wrap{padding-inline:16px}.topbar__inner{min-height:60px}.brand{font-size:15px}.hero{padding-top:42px}.hero__sub{margin-bottom:24px}.stats{gap:10px}.stat{padding:15px 13px}#telegram-access .card{padding:22px 18px}.controls{padding:12px}.field--grow{flex-basis:100%}.field,.toggle{width:100%}.section-h{margin-top:42px}.footer{margin-top:36px}}
 @media(prefers-reduced-motion:reduce){.cards .card:hover{transform:none}}
+
+/* International premium banner and refresh controls */
+.brand-banner{padding-top:20px;padding-bottom:0}.brand-banner__art{border:1px solid rgba(89,166,255,.22);border-radius:26px;overflow:hidden;box-shadow:0 22px 70px rgba(0,0,0,.28),0 0 42px rgba(34,158,217,.08)}.brand-banner__art svg{display:block;width:100%;height:auto;min-height:120px}.hero{padding-top:36px}.btn--refresh{margin-left:8px;background:rgba(34,158,217,.14);border-color:rgba(34,158,217,.45);color:#8edfff}.btn--refresh:disabled{opacity:.65;cursor:wait}.btn--refresh.is-loading{animation:refreshPulse 1.1s ease-in-out infinite alternate}@keyframes refreshPulse{to{filter:brightness(1.5)}}.refresh-status{display:inline-block;margin-left:8px;font-size:12px;color:var(--fg-dim)}
+@media(max-width:720px){.brand-banner{padding-top:12px}.brand-banner__art{border-radius:16px}.brand-banner__art svg{min-height:0}.brand-banner__art text{letter-spacing:1px}.refresh-status{display:block;margin:8px 0 0}.btn--refresh{margin:8px 0 0;width:100%;justify-content:center}}
+@media(prefers-reduced-motion:reduce){.btn--refresh.is-loading{animation:none}}
