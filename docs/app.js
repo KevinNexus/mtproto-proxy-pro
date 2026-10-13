@@ -391,7 +391,7 @@
     try {
       const { response, data } = await requestJson("/api/auth/bot/status?state=" + encodeURIComponent(state));
       if (data.status === "pending") {
-        botPollTimer = setTimeout(() => pollBotLogin(state), 1800);
+        botPollTimer = setTimeout(() => pollBotLogin(state), 800);
         return;
       }
       if (response.ok && data.status === "authenticated") {
