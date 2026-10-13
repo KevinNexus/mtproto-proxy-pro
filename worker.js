@@ -239,6 +239,68 @@ async function handleRequest(request, env) {
     return json({ ok: false, error: "Server configuration error" }, 500);
   }
 
+  // Bot-based login flow. Login records use a dedicated key prefix in KV.
+  if (pathname === "/api/auth/bot/start" && request.method === "POST") {
+    if (!sameOrigin(request)) return json({ ok: false, error: "Invalid origin" }, 403);
+    if (!env.PROXY_DATA) return json({ ok: false, error: "Login storage is not configured" }, 500);
+    const stateBytes = crypto.getRandomValues(new Uint8Array(24));
+    const state = Array.from(stateBytes, b => b.toString(16).padStart(2, "0")).join("");
+    await env.PROXY_DATA.put("login:" + state, JSON.stringify({ status: "pending", created: Date.now() }), { expirationTtl: 600 });
+    return json({ ok: true, state, botUrl: "https://t.me/AccessIDBot?start=login_" + state });
+  }
+
+  if (pathname === "/api/auth/bot/status" && request.method === "GET") {
+    if (!env.PROXY_DATA) return json({ ok: false, error: "Login storage is not configured" }, 500);
+    const state = url.searchParams.get("state") || "";
+    if (!/^[a-f0-9]{48}$/.test(state)) return json({ ok: false, error: "Invalid login state" }, 400);
+    const key = "login:" + state;
+    const record = await env.PROXY_DATA.get(key, "json");
+    if (!record) return json({ ok: false, status: "expired", error: "登录请求已过期，请重新开始。" }, 410);
+    if (record.status !== "complete") return json({ ok: true, status: "pending" });
+    await env.PROXY_DATA.delete(key);
+    if (!record.user || !record.user.id) return json({ ok: false, status: "failed", error: "Telegram 身份验证失败。" }, 401);
+    if (!record.subscribed) return json({ ok: false, status: "not_subscribed", error: "请先加入 @CXSNS 官方频道，再重新登录。" }, 403);
+    const token = await createSession(record.user, botToken);
+    return json({ ok: true, status: "authenticated" }, 200, { "Set-Cookie": sessionCookie(token, SESSION_SECONDS) });
+  }
+
+  if (pathname === "/api/telegram/webhook" && request.method === "POST") {
+    const expectedSecret = env.TELEGRAM_WEBHOOK_SECRET;
+    if (!expectedSecret || request.headers.get("X-Telegram-Bot-Api-Secret-Token") !== expectedSecret) {
+      return json({ ok: false, error: "Unauthorized webhook" }, 401);
+    }
+    if (!env.PROXY_DATA) return json({ ok: false, error: "Login storage is not configured" }, 500);
+    let update;
+    try { update = await request.json(); } catch { return json({ ok: false }, 400); }
+    const message = update && update.message;
+    const from = message && message.from;
+    const textValue = String((message && message.text) || "");
+    const match = textValue.match(/^\\/start\\s+login_([a-f0-9]{48})$/);
+    if (!from || !/^\\d+$/.test(String(from.id)) || !match) return json({ ok: true });
+    const state = match[1];
+    const key = "login:" + state;
+    const record = await env.PROXY_DATA.get(key, "json");
+    if (!record || record.status !== "pending") return json({ ok: true });
+    const subscribed = await checkMembership(botToken, from.id);
+    const user = {
+      id: String(from.id),
+      first_name: String(from.first_name || "").slice(0, 100),
+      username: String(from.username || "").slice(0, 100)
+    };
+    await env.PROXY_DATA.put(key, JSON.stringify({ status: "complete", user, subscribed }), { expirationTtl: 300 });
+    const reply = subscribed
+      ? "身份已验证！请返回资源公社代理助手页面，系统正在完成登录。"
+      : "暂未检测到你加入 @CXSNS。请先加入官方频道，再回到网站重新登录。";
+    try {
+      await fetch("https://api.telegram.org/bot" + botToken + "/sendMessage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: String(from.id), text: reply })
+      });
+    } catch {}
+    return json({ ok: true });
+  }
+
   // Mobile-friendly Telegram Login Widget redirect callback.
   // Telegram sends the signed user fields as query parameters to this endpoint.
   if (pathname === "/api/auth/telegram/callback" && request.method === "GET") {
