@@ -409,6 +409,15 @@
     }
   }
 
+  // 浏览器标签页在 Telegram 打开期间可能被降频；用户切回网站时立即检查一次。
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && botPollState) {
+      if (botPollTimer) clearTimeout(botPollTimer);
+      botPollTimer = null;
+      pollBotLogin(botPollState);
+    }
+  });
+
   if (botLoginButton) {
     botLoginButton.addEventListener("click", async () => {
       if (botPollTimer) clearTimeout(botPollTimer);
