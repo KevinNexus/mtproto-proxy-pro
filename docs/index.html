@@ -63,6 +63,37 @@
   </header>
 
   <main>
+      <section class="brand-banner wrap" aria-label="资源公社代理智能服务">
+        <div class="brand-banner__art" aria-hidden="true">
+          <svg viewBox="0 0 1200 260" role="img">
+            <defs>
+              <linearGradient id="bannerGlow" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#37d7ff"/>
+                <stop offset="1" stop-color="#5575ff"/>
+              </linearGradient>
+              <radialGradient id="bannerHalo"><stop stop-color="#229ed9" stop-opacity=".28"/><stop offset="1" stop-color="#229ed9" stop-opacity="0"/></radialGradient>
+            </defs>
+            <rect width="1200" height="260" rx="26" fill="#0b1427"/>
+            <ellipse cx="930" cy="120" rx="360" ry="210" fill="url(#bannerHalo)"/>
+            <g fill="none" stroke="url(#bannerGlow)" stroke-opacity=".38" stroke-width="1.5">
+              <path d="M650 220Q780 20 940 112T1190 48"/><path d="M670 30Q820 210 1000 82T1180 220"/>
+              <path d="M700 130Q850 35 1010 175T1190 130"/><circle cx="930" cy="112" r="84"/><circle cx="930" cy="112" r="126"/>
+            </g>
+            <g fill="#58d7ff">
+              <circle cx="760" cy="70" r="4"/><circle cx="850" cy="194" r="4"/><circle cx="1000" cy="82" r="5"/><circle cx="1115" cy="166" r="4"/><circle cx="1150" cy="56" r="3"/>
+            </g>
+            <g transform="translate(70 58)">
+              <rect width="132" height="132" rx="32" fill="url(#bannerGlow)"/>
+              <path d="M32 68 101 39 84 102 64 83 51 95 53 76Z" fill="#fff"/>
+              <path d="M53 76 101 39 64 83" fill="#d9f8ff"/>
+            </g>
+            <text x="235" y="115" fill="#f7fbff" font-size="60" font-weight="800" letter-spacing="4">资源公社</text>
+            <text x="239" y="161" fill="#8edfff" font-size="24" font-weight="700" letter-spacing="6">PROXY INTELLIGENCE</text>
+            <text x="240" y="198" fill="#9baecb" font-size="17" letter-spacing="2">TELEGRAM MTProto · VERIFIED · FAST ACCESS</text>
+          </svg>
+        </div>
+      </section>
+
     <section class="hero wrap">
       <span class="pill"><span class="dot"></span> Telegram Proxy Assistant</span>
       <h1>Telegram 代理助手</h1>
@@ -182,6 +213,8 @@
           · <a href="all_proxies.txt">全部 TXT</a>
           · <a href="censorship_resistant.txt">抗封锁 TXT</a>
           · <a href="proxies.json">JSON 数据</a>
+          <button type="button" class="btn btn--refresh" id="refresh-proxies">↻ 刷新列表 / 测速数据</button>
+          <span id="refresh-status" class="refresh-status">延迟为最近一次服务端检测结果，后台约每 6 小时更新。</span>
         </p>
 
         <div class="table-wrap">
