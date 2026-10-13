@@ -640,6 +640,7 @@
       <td class="col-server" data-label="服务器">
         <span class="server">${esc(proxy.server)}<span class="port">:${esc(proxy.port)}</span></span>
         <br>${statusLabel}${reachChips(proxy)}
+        <br><a class="resource-brand" href="https://t.me/CXSNS" target="_blank" rel="noopener">资源公社精选 · @CXSNS</a>
       </td>
       <td class="col-type" data-label="类型">
         <span class="badge badge--${esc(proxy.type)}">${esc(typeLabel)}</span>
