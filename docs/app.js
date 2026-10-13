@@ -395,7 +395,20 @@
         return;
       }
 
-      showLogin("请使用 Telegram 登录，并加入官方频道 @CXSNS。");
+      const loginResult = new URLSearchParams(window.location.search).get("login");
+      if (loginResult === "not_subscribed") {
+        showLogin("登录成功，但你尚未加入 @CXSNS。请先加入官方频道，再重新登录验证。");
+      } else if (loginResult === "verification_failed") {
+        showLogin("Telegram 登录信息验证失败，请返回频道链接重新打开网站后再试。");
+      } else {
+        showLogin("请使用 Telegram 登录，并加入官方频道 @CXSNS。");
+      }
+
+      if (loginResult) {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete("login");
+        window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+      }
     } catch (error) {
       console.error("登录状态检查失败：", error);
 
