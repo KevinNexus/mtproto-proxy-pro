@@ -183,3 +183,52 @@ details p { margin: 0 0 14px; color: var(--fg-dim); font-size: 14.5px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+
+/* Premium responsive dark UI polish */
+:root{--bg:#080d18;--surface:rgba(17,26,44,.92);--surface-2:#17243b;--muted:#111b2d;--border:rgba(139,164,205,.20);--fg:#f4f8ff;--fg-dim:#a7b6cf;--brand:#28a8e0;--radius:18px;--shadow:0 18px 48px rgba(0,0,0,.28)}
+body{background:radial-gradient(900px 520px at 12% -8%,rgba(30,115,190,.22),transparent 70%),radial-gradient(700px 420px at 100% 20%,rgba(27,75,140,.13),transparent 72%),var(--bg)}
+.wrap{max-width:1120px}
+.topbar{background:rgba(8,13,24,.88);border-bottom-color:rgba(139,164,205,.16)}
+.topbar__inner{min-height:68px;height:auto}
+.brand{letter-spacing:-.02em}
+.brand__mark{filter:drop-shadow(0 4px 12px rgba(34,158,217,.24))}
+.topbar__nav a:last-child{padding:8px 13px;color:#dff5ff;border:1px solid rgba(40,168,224,.38);background:rgba(40,168,224,.10);border-radius:10px}
+.topbar__nav a:last-child:hover{background:rgba(40,168,224,.18)}
+.hero{padding-top:clamp(44px,7vw,78px);padding-bottom:28px}
+.pill{background:rgba(17,26,44,.74);border-color:rgba(100,180,235,.24)}
+h1{letter-spacing:-.045em;text-wrap:balance}
+.hero__sub{max-width:690px;line-height:1.85}
+.stats{max-width:850px;gap:14px}
+.stat{position:relative;overflow:hidden;text-align:left;padding:20px;background:linear-gradient(145deg,rgba(21,34,57,.96),rgba(13,21,37,.96));border-color:rgba(139,164,205,.18);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.stat::after{content:"";position:absolute;width:78px;height:78px;right:-26px;top:-26px;border-radius:50%;background:rgba(40,168,224,.08)}
+.stat__num{letter-spacing:-.035em}.stat__label{display:block;margin-top:3px}
+.cta{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;border:1px solid rgba(115,210,255,.22);box-shadow:0 8px 24px rgba(34,158,217,.20)}
+.hero__cta{min-width:210px}
+.section-h{margin-top:54px;margin-bottom:20px}
+#telegram-access{scroll-margin-top:84px}
+#telegram-access .section-h{text-align:center}
+#telegram-access .cards{display:flex;justify-content:center}
+#telegram-access .card{width:min(100%,640px);padding:clamp(22px,4vw,34px);background:linear-gradient(145deg,rgba(19,31,52,.98),rgba(12,20,35,.98));box-shadow:var(--shadow)}
+#telegram-access .card h3{font-size:21px;letter-spacing:-.02em}
+#telegram-access .card>p{font-size:15px;line-height:1.8}
+#telegram-login-widget{margin-top:20px}
+#bot-login-button{width:100%;cursor:pointer;font:inherit;font-weight:750}
+#auth-status,#join-channel{display:block;padding:13px 15px;border-radius:12px;border:1px solid rgba(139,164,205,.18);background:rgba(6,12,23,.46)}
+#auth-status{margin-top:14px}
+#join-channel{color:var(--warn)}
+#auth-actions{margin-top:14px}
+#auth-actions .cta{width:100%;background:#26354d;border-color:var(--border);box-shadow:none}
+#telegram-access>.note{max-width:900px;margin:18px auto 0;line-height:1.8}
+.channel-name{color:#dff5ff;font-weight:700}
+#proxies{scroll-margin-top:84px}
+.controls{padding:16px;background:rgba(17,26,44,.56);border:1px solid var(--border);border-radius:16px}
+.field{min-height:48px}
+.table-wrap{margin-top:16px;border-color:rgba(139,164,205,.20)}
+.ptable thead th{padding-block:16px}.ptable td{padding-block:15px}
+.card,details{box-shadow:0 8px 26px rgba(0,0,0,.12)}
+.cards .card{transition:transform .18s ease,border-color .18s ease}
+.cards .card:hover{transform:translateY(-2px);border-color:rgba(40,168,224,.35)}
+.note{line-height:1.8}.footer{background:rgba(5,9,17,.32)}
+@media(max-width:720px){.wrap{padding-inline:16px}.topbar__inner{min-height:60px}.brand{font-size:15px}.hero{padding-top:42px}.hero__sub{margin-bottom:24px}.stats{gap:10px}.stat{padding:15px 13px}#telegram-access .card{padding:22px 18px}.controls{padding:12px}.field--grow{flex-basis:100%}.field,.toggle{width:100%}.section-h{margin-top:42px}.footer{margin-top:36px}}
+@media(prefers-reduced-motion:reduce){.cards .card:hover{transform:none}}
