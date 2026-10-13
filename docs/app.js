@@ -380,6 +380,67 @@
     }
   };
 
+
+  // Mobile-friendly login via the Telegram bot; no telegram.org widget script required.
+  const botLoginButton = $("#bot-login-button");
+  let botPollTimer = null;
+  let botPollState = "";
+
+  async function pollBotLogin(state) {
+    if (botPollState !== state) return;
+    try {
+      const { response, data } = await requestJson("/api/auth/bot/status?state=" + encodeURIComponent(state));
+      if (data.status === "pending") {
+        botPollTimer = setTimeout(() => pollBotLogin(state), 1800);
+        return;
+      }
+      if (response.ok && data.status === "authenticated") {
+        botPollState = "";
+        showLoggedIn();
+        await loadProxies();
+        return;
+      }
+      botPollState = "";
+      setAuthMessage(data.error || "登录请求已失效，请重新开始。");
+      if (loginWidgetEl) loginWidgetEl.hidden = false;
+    } catch (error) {
+      console.error("Bot 登录状态检查失败：", error);
+      botPollTimer = setTimeout(() => pollBotLogin(state), 2500);
+    }
+  }
+
+  if (botLoginButton) {
+    botLoginButton.addEventListener("click", async () => {
+      if (botPollTimer) clearTimeout(botPollTimer);
+      botPollState = "";
+      setAuthMessage("正在创建安全登录请求……");
+      botLoginButton.disabled = true;
+      const popup = window.open("about:blank", "_blank");
+      try {
+        const { response, data } = await requestJson("/api/auth/bot/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
+        });
+        if (!response.ok || !data.ok || !data.state || !data.botUrl) {
+          if (popup) popup.close();
+          throw new Error(data.error || "无法创建登录请求");
+        }
+        if (popup) popup.location.href = data.botUrl;
+        else window.location.href = data.botUrl;
+        botPollState = data.state;
+        setAuthMessage("请在 Telegram 机器人中点击开始；完成身份和频道验证后会自动登录。此请求 10 分钟内有效。");
+        pollBotLogin(data.state);
+      } catch (error) {
+        if (popup) popup.close();
+        console.error("Bot 登录启动失败：", error);
+        setAuthMessage("无法启动机器人登录，请刷新页面后重试。");
+      } finally {
+        botLoginButton.disabled = false;
+      }
+    });
+  }
+
   async function checkAuthStatus() {
     showLogin("正在检查登录状态……");
 
