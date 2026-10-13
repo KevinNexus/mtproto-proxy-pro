@@ -1,4 +1,3 @@
-
 name: Update proxies
 
 on:
@@ -9,6 +8,7 @@ on:
       - "worker.js"
       - "wrangler.jsonc"
       - "docs/**"
+      - "sources.txt"
       - ".github/workflows/update.yml"
   schedule:
     - cron: "17 */6 * * *"
