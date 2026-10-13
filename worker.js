@@ -239,6 +239,41 @@ async function handleRequest(request, env) {
     return json({ ok: false, error: "Server configuration error" }, 500);
   }
 
+  // Mobile-friendly Telegram Login Widget redirect callback.
+  // Telegram sends the signed user fields as query parameters to this endpoint.
+  if (pathname === "/api/auth/telegram/callback" && request.method === "GET") {
+    const params = url.searchParams;
+    const user = {};
+    for (const key of ["id", "first_name", "last_name", "username", "photo_url", "auth_date", "hash"]) {
+      const value = params.get(key);
+      if (value !== null) user[key] = value;
+    }
+
+    const redirectTo = (result) => Response.redirect(
+      `https://kisss.kdns.fr/?login=${encodeURIComponent(result)}#telegram-access`,
+      303
+    );
+
+    if (!(await verifyTelegramLogin(user, botToken))) {
+      return redirectTo("verification_failed");
+    }
+
+    const subscribed = await checkMembership(botToken, user.id);
+    if (!subscribed) {
+      return redirectTo("not_subscribed");
+    }
+
+    const token = await createSession(user, botToken);
+    return new Response(null, {
+      status: 303,
+      headers: {
+        "Location": "https://kisss.kdns.fr/#proxies",
+        "Cache-Control": "no-store",
+        "Set-Cookie": sessionCookie(token, SESSION_SECONDS)
+      }
+    });
+  }
+
   if (pathname === "/api/auth/telegram" && request.method === "POST") {
     if (!sameOrigin(request)) {
       return json({ ok: false, error: "Invalid origin" }, 403);
