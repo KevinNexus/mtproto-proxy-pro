@@ -275,8 +275,8 @@ async function handleRequest(request, env) {
     const message = update && update.message;
     const from = message && message.from;
     const textValue = String((message && message.text) || "");
-    const match = textValue.match(/^\\/start\\s+login_([a-f0-9]{48})$/);
-    if (!from || !/^\\d+$/.test(String(from.id)) || !match) return json({ ok: true });
+    const match = textValue.match(/^\/start\s+login_([a-f0-9]{48})$/);
+    if (!from || !/^\d+$/.test(String(from.id)) || !match) return json({ ok: true });
     const state = match[1];
     const key = "login:" + state;
     const record = await env.PROXY_DATA.get(key, "json");
