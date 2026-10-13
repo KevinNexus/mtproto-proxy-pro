@@ -15,6 +15,8 @@
   const countryEl = $("#country");
   const sortEl = $("#sort");
   const resistEl = $("#resistonly");
+  const refreshButton = $("#refresh-proxies");
+  const refreshStatus = $("#refresh-status");
   const toastEl = $("#toast");
   const bannerEl = $("#banner");
   const bannerTextEl = $("#banner-text");
@@ -31,6 +33,7 @@
   let CURRENT_STATS = {};
   let authenticated = false;
   let loadingProxies = false;
+  let lastLoadedAt = 0;
 
   const CENSORED = {
     IR: "Iran", RU: "Russia", CN: "China", TM: "Turkmenistan",
@@ -284,6 +287,8 @@
 
       ALL = data.proxies;
       CURRENT_STATS = data;
+      lastLoadedAt = Date.now();
+      if (refreshStatus) refreshStatus.textContent = `已刷新列表 · ${new Date(lastLoadedAt).toLocaleTimeString()}；延迟数据来自服务端最近测速。`;
 
       if (loadingEl) loadingEl.hidden = true;
 
@@ -306,6 +311,28 @@
     } finally {
       loadingProxies = false;
     }
+  }
+
+  if (refreshButton) {
+    refreshButton.addEventListener("click", async () => {
+      if (!authenticated) {
+        showToast("请先登录并完成频道验证");
+        return;
+      }
+      if (loadingProxies) return;
+      refreshButton.disabled = true;
+      refreshButton.classList.add("is-loading");
+      refreshButton.textContent = "↻ 正在刷新…";
+      if (refreshStatus) refreshStatus.textContent = "正在从受保护的数据接口重新读取最新列表…";
+      try {
+        await loadProxies();
+        if (lastLoadedAt && refreshStatus) refreshStatus.textContent = `列表已重新读取 · ${new Date(lastLoadedAt).toLocaleTimeString()}；测速数值由后台检测任务更新，并非浏览器实时 TCP 测速。`;
+      } finally {
+        refreshButton.disabled = false;
+        refreshButton.classList.remove("is-loading");
+        refreshButton.textContent = "↻ 刷新列表 / 测速数据";
+      }
+    });
   }
 
   // Telegram Login Widget 会调用这个全局函数。
